@@ -12,5 +12,19 @@ Parameters:
 Resources:
   PracticeVPC:
     Type: AWS::EC2::VPC
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Initial bare bones vpc
     Properties:
-      
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: practice-vpc
+
+Outputs:
+  VpcId:
+    Description: The VPC ID
+    Value: !Ref PracticeVPC
+    
