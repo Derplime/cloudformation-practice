@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  File: 02_VPCWithSubnets.yaml
+  Purpose: CloudFormation template generates a single VPC with a public and private subnet.
+  What to observe:
+    - Use Update stack on your existing Stage 1 stack — do not create a new one
+    - The Events tab shows only the two new subnets being added; the VPC is unchanged
+    - Check the Subnets Console to confirm both subnets appear
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for the VPC
+
+  PublicSubnetCidr:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for the public subnet
+  
+  PrivateSubnetCidr:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: CIDR block for the private subnet
+
+Resources:
+  PracticeVPC:
+    Type: AWS::EC2::VPC
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Initial bare bones vpc
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: practice-vpc
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Public subnet for VPC
+    Properties:
+      VpcId: !Ref PracticeVPC
+      CidrBlock: !Ref PublicSubnetCidr
+      AvailabilityZone: us-east-2a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: practice-public-subnet
+        - Key: Subnet Type
+          Value: Public
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Private subnet for VPC
+    Properties:
+      VpcId: !Ref PracticeVPC
+      CidrBlock: !Ref PrivateSubnetCidr
+      AvailabilityZone: us-east-2b
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: practice-private-subnet
+        - Key: Subnet Type
+          Value: Private
+
+Outputs:
+  VpcId:
+    Description: The VPC ID
+    Value: !Ref PracticeVPC
+  
+  PublicSubnetId:
+    Value: !Ref PublicSubnet
+  
+  PrivateSubnetId:
+    Value: !Ref PrivateSubnet
+    
