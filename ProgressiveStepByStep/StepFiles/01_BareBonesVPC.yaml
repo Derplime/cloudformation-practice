@@ -2,6 +2,10 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   File: 01_BareBonesVPC.yaml
   Purpose: CloudFormation template generates a single VPC with no other resources.
+  What to observe:
+    - The Events tab shows a single resource being created
+    - The Outputs tab shows the VPC ID after creation
+    - Go to the VPC Console and confirm the VPC appears
 
 Parameters:
   VpcCidr:
