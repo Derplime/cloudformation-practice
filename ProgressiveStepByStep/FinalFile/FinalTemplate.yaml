@@ -1,0 +1,396 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Advanced Network Infrastructure Practice Template.
+  Demonstrates VPCs, Subnets, IGW, NAT Gateway, Transit Gateway,
+  Route Tables, Conditions, and Metadata.
+
+###############################################################
+# METADATA
+# Metadata controls how the CloudFormation console presents
+# this template — grouping parameters, adding labels, and
+# providing tooltips to the person deploying the stack.
+###############################################################
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - VpcCidr
+          - PublicSubnetCidr
+          - PrivateSubnetCidr
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - EnvironmentType
+      - Label:
+          default: "Optional Components"
+        Parameters:
+          - EnableNatGateway
+          - EnableTransitGateway
+    ParameterLabels:
+      VpcCidr:
+        default: "VPC CIDR Block"
+      PublicSubnetCidr:
+        default: "Public Subnet CIDR"
+      PrivateSubnetCidr:
+        default: "Private Subnet CIDR"
+      EnvironmentType:
+        default: "Environment Type (dev/staging/prod)"
+      EnableNatGateway:
+        default: "Enable NAT Gateway? (incurs cost)"
+      EnableTransitGateway:
+        default: "Enable Transit Gateway? (incurs cost)"
+
+###############################################################
+# PARAMETERS
+# Inputs provided at deploy time. Conditions below reference
+# these to decide which resources to create.
+###############################################################
+Parameters:
+
+  EnvironmentType:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: >
+      Controls tagging and which optional components are enabled.
+      Use 'dev' to keep costs minimal during practice.
+
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    AllowedPattern: "^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$"
+    ConstraintDescription: Must be a valid CIDR block (e.g. 10.0.0.0/16)
+    Description: CIDR block for the VPC
+
+  PublicSubnetCidr:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for the public subnet
+
+  PrivateSubnetCidr:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: CIDR block for the private subnet
+
+  EnableNatGateway:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: >
+      Set to true to create a NAT Gateway for private subnet
+      outbound internet access. Costs $0.045/hr — keep false for practice.
+
+  EnableTransitGateway:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: >
+      Set to true to create a Transit Gateway and VPC attachment.
+      Costs $0.05/hr per attachment — keep false for practice.
+
+###############################################################
+# CONDITIONS
+# Boolean expressions evaluated at deploy time. Resources use
+# these to decide whether they should be created or skipped.
+# Practice exercise: try toggling these via stack updates.
+###############################################################
+Conditions:
+
+  # True when EnableNatGateway parameter is "true"
+  CreateNatGateway: !Equals [ !Ref EnableNatGateway, "true" ]
+
+  # True when EnableTransitGateway parameter is "true"
+  CreateTransitGateway: !Equals [ !Ref EnableTransitGateway, "true" ]
+
+  # True when deploying to production
+  IsProduction: !Equals [ !Ref EnvironmentType, "prod" ]
+
+  # True when deploying to staging OR production
+  IsStagingOrProd: !Or
+    - !Equals [ !Ref EnvironmentType, "staging" ]
+    - !Equals [ !Ref EnvironmentType, "prod" ]
+
+  # True when NOT in production (dev or staging)
+  IsNotProduction: !Not [ !Equals [ !Ref EnvironmentType, "prod" ] ]
+
+  # Combined condition: only create TGW if enabled AND in staging/prod
+  CreateTGWInHigherEnv: !And
+    - !Condition CreateTransitGateway
+    - !Condition IsStagingOrProd
+
+###############################################################
+# RESOURCES
+###############################################################
+Resources:
+
+  # -----------------------------------------------------------
+  # VPC
+  # -----------------------------------------------------------
+  PracticeVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentType}-practice-vpc"
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: CostCenter
+          Value: !If [ IsProduction, "prod-networking", "dev-networking" ]
+
+  # -----------------------------------------------------------
+  # Subnets
+  # -----------------------------------------------------------
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PracticeVPC
+      CidrBlock: !Ref PublicSubnetCidr
+      AvailabilityZone: us-east-2a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentType}-public-subnet"
+        - Key: SubnetType
+          Value: Public
+        - Key: Environment
+          Value: !Ref EnvironmentType
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PracticeVPC
+      CidrBlock: !Ref PrivateSubnetCidr
+      AvailabilityZone: us-east-2b
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentType}-private-subnet"
+        - Key: SubnetType
+          Value: Private
+        - Key: Environment
+          Value: !Ref EnvironmentType
+
+  # -----------------------------------------------------------
+  # Internet Gateway and Attachment
+  # -----------------------------------------------------------
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentType}-igw"
+        - Key: Environment
+          Value: !Ref EnvironmentType
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref PracticeVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # -----------------------------------------------------------
+  # Public Route Table
+  # -----------------------------------------------------------
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref PracticeVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentType}-public-rt"
+        - Key: Environment
+          Value: !Ref EnvironmentType
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # -----------------------------------------------------------
+  # NAT Gateway — only created when EnableNatGateway = "true"
+  # Practice: update the stack flipping this to "true" and
+  # observe the EIP and NAT Gateway being added in the Events tab
+  # -----------------------------------------------------------
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    Condition: CreateNatGateway        # <-- Condition gates this resource
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentType}-nat-eip"
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateNatGateway        # <-- Condition gates this resource
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentType}-nat-gw"
+        - Key: Environment
+          Value: !Ref EnvironmentType
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref PracticeVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentType}-private-rt"
+
+  PrivateRouteToNat:
+    Type: AWS::EC2::Route
+    Condition: CreateNatGateway        # <-- Only add this route if NAT exists
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  # -----------------------------------------------------------
+  # Transit Gateway — only created when both EnableTransitGateway
+  # = "true" AND EnvironmentType is staging or prod
+  # Practice: observe how the combined condition blocks TGW
+  # creation in dev even if EnableTransitGateway = "true"
+  # -----------------------------------------------------------
+  TransitGateway:
+    Type: AWS::EC2::TransitGateway
+    Condition: CreateTGWInHigherEnv    # <-- Combined condition
+    Properties:
+      Description: !Sub "${EnvironmentType} Practice Transit Gateway"
+      AmazonSideAsn: 64512
+      DefaultRouteTableAssociation: enable
+      DefaultRouteTablePropagation: enable
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentType}-tgw"
+        - Key: Environment
+          Value: !Ref EnvironmentType
+
+  TransitGatewayAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Condition: CreateTGWInHigherEnv    # <-- Combined condition
+    Properties:
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !Ref PracticeVPC
+      SubnetIds:
+        - !Ref PrivateSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentType}-tgw-attachment"
+
+  # -----------------------------------------------------------
+  # Network ACL — demonstrates IsStagingOrProd condition
+  # In dev, the default VPC NACL applies. In staging/prod,
+  # an explicit NACL with tighter rules is created.
+  # -----------------------------------------------------------
+  PrivateNetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Condition: IsStagingOrProd         # <-- Only in staging/prod
+    Properties:
+      VpcId: !Ref PracticeVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentType}-private-nacl"
+
+  NaclInboundRule:
+    Type: AWS::EC2::NetworkAclEntry
+    Condition: IsStagingOrProd
+    Properties:
+      NetworkAclId: !Ref PrivateNetworkAcl
+      RuleNumber: 100
+      Protocol: 6                      # TCP
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 10.0.0.0/8
+      PortRange:
+        From: 443
+        To: 443
+
+  NaclOutboundRule:
+    Type: AWS::EC2::NetworkAclEntry
+    Condition: IsStagingOrProd
+    Properties:
+      NetworkAclId: !Ref PrivateNetworkAcl
+      RuleNumber: 100
+      Protocol: 6
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 1024
+        To: 65535
+
+###############################################################
+# OUTPUTS
+# Expose key resource IDs after deployment. Note the use of
+# !If to conditionally output values that may not exist.
+###############################################################
+Outputs:
+
+  VpcId:
+    Description: The ID of the practice VPC
+    Value: !Ref PracticeVPC
+    Export:
+      Name: !Sub "${EnvironmentType}-PracticeVpcId"
+
+  PublicSubnetId:
+    Description: The ID of the public subnet
+    Value: !Ref PublicSubnet
+    Export:
+      Name: !Sub "${EnvironmentType}-PublicSubnetId"
+
+  PrivateSubnetId:
+    Description: The ID of the private subnet
+    Value: !Ref PrivateSubnet
+    Export:
+      Name: !Sub "${EnvironmentType}-PrivateSubnetId"
+
+  NatGatewayId:
+    Description: NAT Gateway ID (only present when enabled)
+    Condition: CreateNatGateway
+    Value: !Ref NatGateway
+
+  TransitGatewayId:
+    Description: Transit Gateway ID (only present in staging/prod when enabled)
+    Condition: CreateTGWInHigherEnv
+    Value: !Ref TransitGateway
+
+  EnvironmentSummary:
+    Description: Summary of what was deployed
+    Value: !Sub
+      - "Environment: ${Env} | NAT: ${NatStatus} | TGW: ${TgwStatus}"
+      - Env: !Ref EnvironmentType
+        NatStatus: !If [ CreateNatGateway, "Enabled", "Disabled" ]
+        TgwStatus: !If [ CreateTGWInHigherEnv, "Enabled", "Disabled" ]

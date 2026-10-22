@@ -1,0 +1,47 @@
+# Format version hasn't changed since this time.
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Base VPC and Subnet Practice # Optional, but it's nice for clarity on what this template is about.
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+
+Resources:
+
+  PracticeVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: practice-vpc
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PracticeVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: us-east-2a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: practice-public-subnet
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PracticeVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: us-east-2b
+      Tags:
+        - Key: Name
+          Value: practice-private-subnet
+
+Outputs:
+  VpcId:
+    Value: !Ref PracticeVPC
+    Export:
+      Name: PracticeVpcId

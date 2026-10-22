@@ -1,0 +1,16 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  File: 01_BareBonesVPC.yaml
+  Purpose: CloudFormation template generates a single VPC with no other resources.
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for the VPC
+
+Resources:
+  PracticeVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      

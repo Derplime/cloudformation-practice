@@ -1,0 +1,8 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Network Infrastructure Practice
+
+Parameters: {}   # Optional inputs. These can be referenced. Have their own properties.
+
+Resources: {}    # Required — Your infrastructure goes here. Has specific keys and values at times.
+
+Outputs: {}      # Optional — Expose key values after deployment
