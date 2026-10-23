@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  File: 03_AddIGWAndRouting.yaml
+  Purpose: CloudFormation template generates a single VPC with a public and private subnet
+  with an Internet Gateway and network routing.
+  What to observe:
+    - Note how DependsOn: VPCGatewayAttachment forces the route to wait for the IGW to be attached
+    - Check the Route Tables Console: confirm the public route table has a 0.0.0.0/0 +route pointing to the IGW
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for the VPC
+
+  PublicSubnetCidr:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for the public subnet
+  
+  PrivateSubnetCidr:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: CIDR block for the private subnet
+
+Resources:
+  PracticeVPC:
+    Type: AWS::EC2::VPC
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Initial bare bones vpc
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: practice-vpc
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Public subnet for practice VPC
+    Properties:
+      VpcId: !Ref PracticeVPC
+      CidrBlock: !Ref PublicSubnetCidr
+      AvailabilityZone: us-east-2a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: practice-public-subnet
+        - Key: Subnet Type
+          Value: Public
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Private subnet for practice VPC
+    Properties:
+      VpcId: !Ref PracticeVPC
+      CidrBlock: !Ref PrivateSubnetCidr
+      AvailabilityZone: us-east-2b
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: practice-private-subnet
+        - Key: Subnet Type
+          Value: Private
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: IGW for practice VPC
+    Properties:
+      Tags:
+        - Key: Name
+          Value: practice-igw
+  
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: VPCGatewayAttachment for the IGW and the practice VPC
+    Properties:
+      VpcId: !Ref PracticeVPC
+      InternetGatewayId: !Ref InternetGateway
+  
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Public route table for the practice VPC
+    Properties:
+      Tags: 
+        - Key: Name
+          Value: practice-public-rt
+      VpcId: !Ref PracticeVPC # Required
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Public Subnet RT Association
+    Properties:
+      RouteTableId: !Ref PublicRouteTable # Required
+      SubnetId: !Ref PublicSubnet # Required
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Private route table for the practice VPC
+    Properties:
+      Tags: 
+        - Key: Name
+          Value: practice-private-rt
+      VpcId: !Ref PracticeVPC # Required
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Private Subnet RT Association
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable # Required
+      SubnetId: !Ref PrivateSubnet # Required  
+
+Outputs:
+  VpcId:
+    Description: The VPC ID
+    Value: !Ref PracticeVPC
+  
+  PublicSubnetId:
+    Value: !Ref PublicSubnet
+  
+  PrivateSubnetId:
+    Value: !Ref PrivateSubnet
+    
